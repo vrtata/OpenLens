@@ -1,0 +1,59 @@
+name: Build Lens
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+          
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3.0.2
+      - name: Export version to variable
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+             export LENS_VERSION=$(cat version)
+             echo "LENS_VERSION=$LENS_VERSION" >> $GITHUB_ENV
+          else
+            export LENS_VERSION=$(cat version)
+            echo "LENS_VERSION=$LENS_VERSION" >> $GITHUB_ENV
+          fi
+        shell: bash
+      - uses: actions/setup-node@v3        
+        with:
+          node-version: 14.19.3
+      - name: Build Lens
+        run: |
+          git clone https://github.com/lensapp/lens.git
+          cd lens
+          git checkout v${{ env.LENS_VERSION }}
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            choco install visualstudio2019buildtools visualstudio2019-workload-vctools
+          fi
+          make build
+          if [ "$RUNNER_OS" == "macOS" ]; then
+                mv dist/OpenLens-${{ env.LENS_VERSION }}-latest.*.dmg dist/OpenLens-${{ env.LENS_VERSION }}.dmg
+          elif [ "$RUNNER_OS" == "Linux" ]; then
+                mv dist/OpenLens-${{ env.LENS_VERSION }}-latest.*.x86_64.AppImage dist/OpenLens-${{ env.LENS_VERSION }}.AppImage
+                mv dist/OpenLens-${{ env.LENS_VERSION }}-latest.*.amd64.deb dist/OpenLens-${{ env.LENS_VERSION }}.deb
+                mv dist/OpenLens-${{ env.LENS_VERSION }}-latest.*.x86_64.rpm dist/OpenLens-${{ env.LENS_VERSION }}.rpm
+          else
+                mv dist/OpenLens*.exe dist/OpenLens-${{ env.LENS_VERSION }}.exe
+          fi
+        shell: bash
+      - name: Release
+        uses: softprops/action-gh-release@v0.1.14
+        with:
+          tag_name: v${{ env.LENS_VERSION }}
+          files: | 
+              lens/dist/OpenLens-${{ env.LENS_VERSION }}.dmg
+              lens/dist/OpenLens-${{ env.LENS_VERSION }}.AppImage
+              lens/dist/OpenLens-${{ env.LENS_VERSION }}.deb
+              lens/dist/OpenLens-${{ env.LENS_VERSION }}.rpm
+              lens/dist/OpenLens-${{ env.LENS_VERSION }}.exe
